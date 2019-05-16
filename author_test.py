@@ -57,19 +57,6 @@ def multiclass_accurate(actual, predicted):
     vsota = np.sum(actual * predicted)
     return 1.0 / rows * vsota
 
-
-train = pd.read_csv('train.csv')
-test = pd.read_csv('test.csv')
-#sample = pd.read_csv('../input/sample_submission.csv')
-
-#print(train.author.head())
-lbl_enc = preprocessing.LabelEncoder()
-y = lbl_enc.fit_transform(train.author.values)
-
-
-xtrain, xvalid, ytrain, yvalid = model_selection.train_test_split(train.text.values, y, stratify=y, random_state=42, test_size=0.1, shuffle=True)
-
-
 class UnigramPredictions(TransformerMixin):
     def __init__(self):
         self.unigram_mnb = Pipeline([('text', CountVectorizer()), ('mnb', MultinomialNB())])
@@ -94,51 +81,6 @@ class UnigramPredictions(TransformerMixin):
         # sum of the other two. In some cases, that colinearity can actually be problematic.
         del unigram_predictions[unigram_predictions.columns[0]]
         df = df.merge(unigram_predictions, left_index=True, right_index=True)
-        return df
-
-    def transform(self, text_series):
-        # Every custom transformer also requires a transform method. This time we just want to 
-        # provide the unigram predictions.
-        return self.add_unigram_predictions(text_series)
-
-class TfidfFeatures():
-    def __init__(self):
-        self.tfv = TfidfVectorizer(min_df=3,  max_features=None, \
-                    strip_accents='unicode', analyzer='word',token_pattern=r'\w{1,}',\
-                    ngram_range=(1, 2), use_idf=1,smooth_idf=1,sublinear_tf=1,\
-                    stop_words = 'english')
-        self.tfidfpipeline = Pipeline([('tfv', tfv), ('mnb', MultinomialNB())])
-
-        # Fitting TF-IDF to both training and test sets (semi-supervised learning)
-        # self.tfv.fit(list(xtrain) + list(xvalid))
-        # xtrain_tfv =  self.tfv.transform(xtrain) 
-        # xvalid_tfv = self.tfv.transform(xvalid)
-
-        # # Fitting a simple Logistic Regression on TFIDF
-        # clf = LogisticRegression(C=1.0)
-        # clf.fit(xtrain_tfv, ytrain)
-        # predictions = clf.predict_proba(xvalid_tfv)
-
-    def fit(self, x, y=None):
-        # Every custom transformer requires a fit method. In this case, we want to train
-        # the naive bayes model.
-        self.tfv.fit(x, y)
-        return self
-    
-    def add_unigram_predictions(self, text_series):
-        # Resetting the index ensures the indexes equal the row numbers.
-        # This guarantees nothing will be misaligned when we merge the dataframes further down.
-        df = pd.DataFrame(text_series.reset_index(drop=True))
-        # Make unigram predicted probabilities and label them with the prediction class, aka 
-        # the author.
-        tf_idf = pd.DataFrame(
-            self.tfv.predict_proba(text_series),
-            columns=['tf_idf' + str(x) for x in self.tfv.classes_]
-                                           )
-        # We only need 2 out of 3 columns, as the last is always one minus the 
-        # sum of the other two. In some cases, that colinearity can actually be problematic.
-        del tf_idf[tf_idf.columns[0]]
-        df = df.merge(tf_idf, left_index=True, right_index=True)
         return df
 
     def transform(self, text_series):
@@ -239,7 +181,7 @@ class Word2VecFeatures(TransformerMixin):
         xtrain_glove = np.array(xtrain_glove)
         word2vec_features = pd.DataFrame(
             xtrain_glove,
-            columns=['tf_idf' + str(x) for x in range(100)]
+            columns=['word_vector' + str(x) for x in range(100)]
                                            )
         # We only need 2 out of 3 columns, as the last is always one minus the 
         # sum of the other two. In some cases, that colinearity can actually be problematic.
@@ -256,56 +198,6 @@ class Word2VecFeatures(TransformerMixin):
     def transform(self, df):
         return self.add_word2vec_features(df.copy())
     # Always start with these features. They work (almost) everytime!
-    def cache(self):
-        
-        #print(predictions)
-        print(predictions.shape)
-        print ("logloss: %0.3f " % multiclass_logloss(yvalid, predictions))
-
-        ptest = np.zeros((1958, 3))
-        pp = np.random.randint(3, size = 1958)
-        for i in range(0, 1958):
-            ptest[i][pp[i]] = 1
-        print ("logloss: %0.3f " % multiclass_logloss(yvalid, ptest))
-        print("accurate: %0.3f " % multiclass_accurate(yvalid, ptest))
-
-        for i in range(0, 1958):
-            k = np.argmax(predictions[i])
-            predictions[i] = np.zeros(3)
-            predictions[i][k] = 1
-        print ("logloss: %0.3f " % multiclass_logloss(yvalid, predictions))
-        print("accurate: %0.3f " % multiclass_accurate(yvalid, predictions))
-
-        #Naive Bayes
-        ctv = CountVectorizer(analyzer='word',token_pattern=r'\w{1,}',
-                    ngram_range=(1, 3), stop_words = 'english')
-
-        # Fitting Count Vectorizer to both training and test sets (semi-supervised learning)
-        ctv.fit(list(xtrain) + list(xvalid))
-        xtrain_ctv =  ctv.transform(xtrain) 
-        xvalid_ctv = ctv.transform(xvalid)
-        clf = MultinomialNB()
-        clf.fit(xtrain_ctv, ytrain)
-        predictions = clf.predict_proba(xvalid_ctv)
-        print(predictions)
-        print ("NB：　logloss: %0.3f " % multiclass_logloss(yvalid, predictions))
-        print("NB: %0.3f " % multiclass_accurate(yvalid, predictions))
-
-        
-        # this function creates a normalized vector for the whole sentence
-        
-        xtrain_glove =[self.sent2vec(x) for x in tqdm(xtrain)]
-        xvalid_glove = [self.sent2vec(x) for x in tqdm(xvalid)]
-        xtrain_glove = np.array(xtrain_glove)
-        xvalid_glove = np.array(xvalid_glove)
-        # Fitting a simple xgboost on glove features
-        #clf = xgb.XGBClassifier(nthread=10, silent=False)
-        clf = LogisticRegression(C=1.0)
-        clf.fit(xtrain_glove, ytrain)
-        predictions = clf.predict_proba(xvalid_glove)
-        print(predictions)
-        print ("logloss: %0.3f " % multiclass_logloss(yvalid, predictions))
-        print("word2vec : %0.3f " % multiclass_accurate(yvalid, predictions))
 
 class DropStringColumns(TransformerMixin):
     # You may have noticed something odd about this class: there's no __init__!
@@ -347,11 +239,6 @@ logit_all_features_pipe = Pipeline([
      ('clean', DropStringColumns()), 
      ('clf', LogisticRegression())
  ])
-# logit_all_features_pipe.fit(xtrain, ytrain)
-# predictions = logit_all_features_pipe.predict_proba(xvalid)
-# print(predictions)
-# print ("logloss: %0.3f " % multiclass_logloss(yvalid, predictions))
-                                   
 
 def generate_submission_df(trained_prediction_pipeline, test_df):
     predictions = pd.DataFrame(
