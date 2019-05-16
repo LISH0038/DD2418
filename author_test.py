@@ -54,6 +54,27 @@ def multiclass_accurate(actual, predicted):
         actual = actual2
 
     rows = actual.shape[0]
+
+    for i in range(0, rows):
+        k = np.argmax(predicted[i])
+        predicted[i] = np.zeros(3)
+        predicted[i][k] = 1
+
+    vsota = np.sum(actual * predicted)
+    return 1.0 / rows * vsota 
+def multiclass_accurate_old(actual, predicted):
+    """Multi class version of accurate.
+    :param actual: Array containing the actual target classes
+    :param predicted: Matrix with class predictions, one hot result per class
+    """
+    # Convert 'actual' to a binary array if it's not already:
+    if len(actual.shape) == 1:
+        actual2 = np.zeros((actual.shape[0], predicted.shape[1]))
+        for i, val in enumerate(actual):
+            actual2[i, val] = 1
+        actual = actual2
+
+    rows = actual.shape[0]
     vsota = np.sum(actual * predicted)
     return 1.0 / rows * vsota
 
@@ -176,7 +197,6 @@ class Word2VecFeatures(TransformerMixin):
     def add_word2vec_features(self, df):
         text_series = df[TEXT_COLUMN]
 
-        #df = pd.DataFrame(text_series.reset_index(drop=True))
         xtrain_glove =[self.sent2vec(x) for x in tqdm(text_series)]
         xtrain_glove = np.array(xtrain_glove)
         word2vec_features = pd.DataFrame(
@@ -232,12 +252,11 @@ def test_pipeline(df, nlp_pipeline, pipeline_name=''):
     print(f'{pipeline_name} mean log loss: {round(pd.np.mean(losses), 3)}')
 
 logit_all_features_pipe = Pipeline([
-    
-        ('uni', UnigramPredictions()),
-        ('nlp', PartOfSpeechFeatures()),
-        ('word2vec', Word2VecFeatures()),
-     ('clean', DropStringColumns()), 
-     ('clf', LogisticRegression())
+    ('uni', UnigramPredictions()),
+    ('nlp', PartOfSpeechFeatures()),
+    ('word2vec', Word2VecFeatures()),
+    ('clean', DropStringColumns()), 
+    ('clf', LogisticRegression())
  ])
 
 def generate_submission_df(trained_prediction_pipeline, test_df):
