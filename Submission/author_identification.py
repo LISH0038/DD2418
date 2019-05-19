@@ -147,11 +147,15 @@ class ClearTextAndNormalize(TransformerMixin):
 
     def transform(self, df):
         del df['text']
+        
+        # We choose not to use normalization as we find it does not perform as well
+        # as non-normalized data
+        
         # Normalize
-        x = df.values 
-        min_max_scaler = preprocessing.MinMaxScaler()
-        x_scaled = min_max_scaler.fit_transform(x)
-        df = pd.DataFrame(x_scaled)
+        # x = df.values 
+        # min_max_scaler = preprocessing.MinMaxScaler()
+        # x_scaled = min_max_scaler.fit_transform(x)
+        # df = pd.DataFrame(x_scaled)
 
         return df
 def run_pipeline(df, pipeline, pipeline_name=''):
